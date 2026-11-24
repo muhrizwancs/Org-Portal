@@ -1,0 +1,5 @@
+Flask>=3.0
+pymongo[srv]>=4.7
+PyJWT>=2.8
+python-dotenv>=1.0
+pypdf>=4.0

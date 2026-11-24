@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Org Portal</title>
+<script>(function(){var t=localStorage.getItem("portal_theme")||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");document.documentElement.dataset.theme=t;})();</script>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%230E6E73%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-size=%2717%27 text-anchor=%27middle%27 fill=%27white%27 font-family=%27Arial%27 font-weight=%27bold%27%3EO%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+<!-- ============ LOGIN ============ -->
+<section id="login">
+  <button type="button" class="theme-btn" id="themeLogin">Dark mode</button>
+  <div class="login-art">
+    <h1>Know your role. Know your access.</h1>
+    <p>Sign in to see your tasks, announcements and documents, and ask the assistant about your account.</p>
+  </div>
+  <div class="login-form">
+    <form id="loginForm">
+      <h2>Sign in</h2>
+      <label>Email<input type="email" id="lEmail" autocomplete="username" required></label>
+      <label>Password<input type="password" id="lPass" autocomplete="current-password" required></label>
+      <label class="check"><input type="checkbox" id="lRemember"> Keep me signed in on this device</label>
+      <div class="err" id="lErr" role="alert"></div>
+      <button class="btn" type="submit">Sign in</button>
+      <span class="muted" style="font-size:.85rem">Accounts are created by your organization's admin.</span>
+    </form>
+  </div>
+</section>
+
+<!-- ============ APP ============ -->
+<div id="app" class="hidden">
+  <aside>
+    <div class="brand">Org Portal</div>
+    <nav id="nav" aria-label="Main"></nav>
+    <div class="me">
+      <b id="meName"></b>
+      <span class="badge" id="meRole"></span><br>
+      <div class="row"><button id="themeBtn" type="button">Dark mode</button><button id="logout">Sign out</button></div>
+    </div>
+  </aside>
+  <main>
+    <div class="topbar">
+      <button type="button" class="bell" id="bell" aria-label="Notifications" aria-haspopup="true" aria-expanded="false">&#128276;<span class="count hidden" id="bellCount">0</span></button>
+      <div class="panel notif-panel hidden" id="notifPanel" role="dialog" aria-label="Notifications"></div>
+    </div>
+
+    <!-- Dashboard -->
+    <section id="v-dashboard" class="hidden"></section>
+
+    <!-- Assistant + chat history -->
+    <section id="v-assistant" class="hidden">
+      <h2>Assistant</h2>
+      <p class="sub">Answers come from this portal's records and documents, and are scoped to your role and department.</p>
+      <div class="assist" id="assist">
+        <div class="hist" id="hist">
+          <button class="btn small" id="newChat" type="button">+ New chat</button>
+          <h4>Previous chats</h4>
+          <div id="histList"></div>
+        </div>
+        <div class="chat">
+          <div id="log" aria-live="polite"></div>
+          <div>
+            <div class="suggest" id="suggest"></div>
+            <form class="ask" id="askForm">
+              <input type="text" id="q" placeholder="Ask about your tasks, documents, policies or account" autocomplete="off" aria-label="Your question" maxlength="500">
+              <button class="btn" type="submit">Ask</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- My tasks -->
+    <section id="v-tasks" class="hidden">
+      <h2>My Tasks</h2>
+      <p class="sub" id="tasksSub"></p>
+      <div class="board" id="board"></div>
+    </section>
+
+    <!-- Announcements -->
+    <section id="v-announcements" class="hidden">
+      <div class="bar">
+        <div><h2>Announcements</h2><p class="sub" style="margin:0">Policies, holidays, company updates and training programs.</p></div>
+        <button class="btn admin-only" id="addAnn">New announcement</button>
+      </div>
+      <div class="filters"><select id="annCat" aria-label="Filter by category"></select></div>
+      <div id="annList"></div>
+    </section>
+
+    <!-- Documents -->
+    <section id="v-documents" class="hidden">
+      <div class="bar">
+        <div><h2>Documents</h2><p class="sub" style="margin:0">Handbooks, policies and forms. The assistant answers from these and shows the file and page.</p></div>
+        <button class="btn admin-only" id="addDoc">Upload document</button>
+      </div>
+      <div class="filters">
+        <input type="text" id="docSearch" placeholder="Search documents" aria-label="Search documents">
+        <select id="docCat" aria-label="Filter by category"></select>
+      </div>
+      <div class="panel scroll"><table>
+        <thead><tr><th>Document</th><th>Category</th><th>For</th><th>Updated</th><th></th></tr></thead>
+        <tbody id="docRows"></tbody>
+      </table></div>
+    </section>
+
+    <!-- Requests / approvals -->
+    <section id="v-requests" class="hidden">
+      <div class="bar">
+        <div><h2 id="reqTitle">Requests</h2><p class="sub" style="margin:0" id="reqSub"></p></div>
+        <button class="btn user-only" id="addReq">New request</button>
+      </div>
+      <div class="filters admin-only"><select id="reqStatus" aria-label="Filter by status"></select></div>
+      <div id="reqList"></div>
+    </section>
+
+    <!-- Profile -->
+    <section id="v-profile" class="hidden">
+      <h2>Profile</h2>
+      <p class="sub">These details are set by the admin.</p>
+      <div class="panel prof"><dl id="profList"></dl></div>
+    </section>
+
+    <!-- Account -->
+    <section id="v-account" class="hidden">
+      <h2>Account</h2>
+      <p class="sub">Change your password.</p>
+      <form class="panel acct" id="pwForm">
+        <label>Current password<input type="password" id="pwCur" autocomplete="current-password" required></label>
+        <label>New password (8+ characters)<input type="password" id="pwNew" autocomplete="new-password" minlength="8" required></label>
+        <div class="err" id="pwErr"></div><div class="ok" id="pwOk"></div>
+        <button class="btn" type="submit" style="justify-self:start">Save password</button>
+      </form>
+    </section>
+
+    <!-- Admin: team tasks -->
+    <section id="v-team-tasks" class="hidden">
+      <h2>Team tasks</h2>
+      <p class="sub">Every task assigned in the organization. Assign or edit tasks from <b>Users</b>.</p>
+      <div class="filters">
+        <select id="ttStatus" aria-label="Status"></select>
+        <select id="ttPrio" aria-label="Priority"></select>
+        <select id="ttUser" aria-label="Person"></select>
+      </div>
+      <div class="panel scroll"><table>
+        <thead><tr><th>Task</th><th>Assigned to</th><th>Priority</th><th>Status</th><th>Progress</th><th>Due</th></tr></thead>
+        <tbody id="ttRows"></tbody>
+      </table></div>
+    </section>
+
+    <!-- Admin: users -->
+    <section id="v-users" class="hidden">
+      <div class="bar">
+        <div><h2>Users</h2><p class="sub" style="margin:0">Create accounts, set department and manager, control page access and assign tasks.</p></div>
+        <button class="btn" id="addUser">Add user</button>
+      </div>
+      <div class="panel scroll"><table>
+        <thead><tr><th>Name</th><th>Role</th><th>Department</th><th>Access</th><th>Tasks</th><th></th></tr></thead>
+        <tbody id="userRows"></tbody>
+      </table></div>
+    </section>
+
+    <!-- Admin: knowledge -->
+    <section id="v-knowledge" class="hidden">
+      <div class="bar">
+        <div><h2>Knowledge</h2><p class="sub" style="margin:0">What the assistant answers from. New entries are reviewed by the super admin before they go live.</p></div>
+        <button class="btn" id="addKnow">Add entry</button>
+      </div>
+      <div class="panel scroll"><table>
+        <thead><tr><th>Title</th><th>Status</th><th>Department</th><th>Visible to</th><th>Text</th><th></th></tr></thead>
+        <tbody id="knowRows"></tbody>
+      </table></div>
+    </section>
+
+    <!-- Admin: feedback -->
+    <section id="v-feedback" class="hidden">
+      <h2>Feedback</h2>
+      <p class="sub">How people rated the assistant's answers. Fix the not-helpful ones in Knowledge or Documents.</p>
+      <div class="grid-cards" id="fbStats"></div>
+      <div class="filters"><select id="fbFilter" aria-label="Filter"></select></div>
+      <div class="panel scroll"><table>
+        <thead><tr><th>Question</th><th>Rating</th><th>Answer</th><th>From</th></tr></thead>
+        <tbody id="fbRows"></tbody>
+      </table></div>
+    </section>
+
+    <!-- Admin: analytics -->
+    <section id="v-analytics" class="hidden">
+      <h2>Analytics</h2>
+      <p class="sub">Usage of the portal and the assistant.</p>
+      <div id="anBody"></div>
+    </section>
+  </main>
+</div>
+
+<!-- user dialog -->
+<dialog id="userDlg" class="wide">
+  <form id="userForm" method="dialog">
+    <h3 id="userDlgTitle"></h3>
+    <div class="grid2">
+      <label>Name<input type="text" id="uName" required></label>
+      <label>Job title<input type="text" id="uJob"></label>
+      <label>Email<input type="email" id="uEmail" required></label>
+      <label>Employee ID<input type="text" id="uEmp" placeholder="Automatic if empty"></label>
+      <label>Department<select id="uDept"></select></label>
+      <label>Manager<select id="uMgr"></select></label>
+      <label>Joining date<input type="date" id="uJoin"></label>
+      <label>Role
+        <select id="uRole"><option value="user">User</option><option value="admin">Admin</option></select>
+      </label>
+      <label><span id="uPassLabel">Password</span><input type="password" id="uPass" autocomplete="new-password" minlength="8"></label>
+      <label style="align-content:end"><span style="display:flex;gap:8px;font-weight:400;align-items:center"><input type="checkbox" id="uActive"> Account is active</span></label>
+      <label style="align-content:end" id="uSuperWrap"><span style="display:flex;gap:8px;font-weight:400;align-items:center"><input type="checkbox" id="uSuper"> Super admin (approves knowledge)</span></label>
+    </div>
+    <fieldset><legend>Access (pages and features)</legend><div class="checks" id="uPerms"></div><small class="muted" id="adminNote"></small></fieldset>
+    <fieldset><legend>Tasks</legend><div id="uAsg"></div><button type="button" class="btn ghost small" id="addAsg">Add task</button></fieldset>
+    <div class="err" id="uErr" role="alert"></div>
+    <div class="foot"><button type="button" class="btn ghost" id="uCancel">Cancel</button><button class="btn" type="submit">Save changes</button></div>
+  </form>
+</dialog>
+
+<!-- knowledge dialog -->
+<dialog id="knowDlg">
+  <form id="knowForm" method="dialog">
+    <h3>Add knowledge entry</h3>
+    <label>Title<input type="text" id="kTitle" required></label>
+    <label>Keywords (optional, helps the assistant match questions)<input type="text" id="kKeys"></label>
+    <div class="grid2">
+      <label>Visible to
+        <select id="kAud"><option value="all">Everyone</option><option value="admin">Admin only</option></select>
+      </label>
+      <label>Department (ranked first for this department)<select id="kDept"></select></label>
+    </div>
+    <label>Text<textarea id="kText" required></textarea></label>
+    <div class="err" id="kErr" role="alert"></div>
+    <div class="foot"><button type="button" class="btn ghost" id="kCancel">Cancel</button>
+      <span class="row-gap" id="kButtons"></span></div>
+  </form>
+</dialog>
+
+<!-- announcement dialog -->
+<dialog id="annDlg">
+  <form id="annForm" method="dialog">
+    <h3>New announcement</h3>
+    <label>Title<input type="text" id="aTitle" required maxlength="150"></label>
+    <div class="grid2">
+      <label>Category<select id="aCat"></select></label>
+      <label>Audience<select id="aDept"></select></label>
+    </div>
+    <label>Text<textarea id="aBody" required></textarea></label>
+    <label class="check"><input type="checkbox" id="aPin"> Pin to the top</label>
+    <div class="err" id="aErr" role="alert"></div>
+    <div class="foot"><button type="button" class="btn ghost" id="aCancel">Cancel</button><button class="btn" type="submit">Publish</button></div>
+  </form>
+</dialog>
+
+<!-- document dialog -->
+<dialog id="docDlg">
+  <form id="docForm" method="dialog">
+    <h3 id="docDlgTitle">Upload document</h3>
+    <label><span id="dFileLabel">File</span><input type="file" id="dFile"></label>
+    <label>Title (optional, defaults to the file name)<input type="text" id="dTitle" maxlength="150"></label>
+    <div class="grid2">
+      <label>Category<select id="dCat"></select></label>
+      <label>Visible to<select id="dDept"></select></label>
+    </div>
+    <p class="note" id="dNote">PDF, Word (.docx) and text files are read by the assistant so it can cite file and page. Other files can be downloaded but are not searched.</p>
+    <div class="err" id="dErr" role="alert"></div>
+    <div class="foot"><button type="button" class="btn ghost" id="dCancel">Cancel</button><button class="btn" type="submit" id="dSave">Upload</button></div>
+  </form>
+</dialog>
+
+<!-- request dialog -->
+<dialog id="reqDlg">
+  <form id="reqForm" method="dialog">
+    <h3>New request</h3>
+    <div class="grid2">
+      <label>Type<select id="rType"></select></label>
+      <label>Title<input type="text" id="rTitle" required maxlength="120"></label>
+    </div>
+    <div class="grid2" id="rDates">
+      <label>Start date<input type="date" id="rStart"></label>
+      <label>End date<input type="date" id="rEnd"></label>
+    </div>
+    <label>Details<textarea id="rDetails" maxlength="1000"></textarea></label>
+    <div class="err" id="rErr" role="alert"></div>
+    <div class="foot"><button type="button" class="btn ghost" id="rCancel">Cancel</button><button class="btn" type="submit">Submit for approval</button></div>
+  </form>
+</dialog>
+
+<!-- decision dialog (admin) -->
+<dialog id="decDlg">
+  <form id="decForm" method="dialog">
+    <h3>Review request</h3>
+    <div id="decInfo"></div>
+    <label>Note to the requester (optional)<textarea id="decNote" maxlength="500"></textarea></label>
+    <div class="err" id="decErr" role="alert"></div>
+    <div class="foot"><button type="button" class="btn ghost" id="decCancel">Cancel</button>
+      <span class="row-gap"><button type="button" class="btn danger" id="decReject">Reject</button><button type="button" class="btn" id="decApprove">Approve</button></span></div>
+  </form>
+</dialog>
+
+<!-- review dialog (knowledge) -->
+<dialog id="revDlg">
+  <form id="revForm" method="dialog">
+    <h3 id="revTitle">Review entry</h3>
+    <div id="revInfo"></div>
+    <label>Note to the author (optional)<textarea id="revNote" maxlength="500"></textarea></label>
+    <div class="foot"><button type="button" class="btn ghost" id="revCancel">Cancel</button>
+      <span class="row-gap"><button type="button" class="btn danger" id="revReject">Reject</button><button type="button" class="btn" id="revApprove">Approve</button></span></div>
+  </form>
+</dialog>
+
+<script src="/app.js"></script>
+</body>
+</html>
