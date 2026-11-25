@@ -214,6 +214,8 @@ def public_user(u, names=None):
         "id": str(u["_id"]), "name": u["name"], "email": u["email"], "role": u["role"],
         "superAdmin": bool(u.get("superAdmin")),
         "jobTitle": u.get("jobTitle", ""), "department": u.get("department", ""),
+        "jobRoleId": str(u["jobRoleId"]) if u.get("jobRoleId") else None,
+        "jobRole": u.get("jobRole", ""),
         "employeeId": u.get("employeeId", ""), "joiningDate": u.get("joiningDate"),
         "managerId": mid, "managerName": (names or {}).get(mid, "") if mid else "",
         "permissions": list(PERMS) if admin else u.get("permissions", []),

@@ -3,7 +3,7 @@
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let token = localStorage.getItem('portal_token') || sessionStorage.getItem('portal_token');
-let me = null, catalog = {}, cfg = {}, defaultPerms = [], users = [], editing = null, asgDraft = [];
+let me = null, catalog = {}, cfg = {}, defaultPerms = [], users = [], jobRoles = [], editing = null, asgDraft = [], editingJobRole = null;
 let chatId = null, notifTimer = null, current = null;
 
 async function api(path, opts = {}) {
@@ -71,6 +71,7 @@ const PAGES = [
   ['documents', 'Documents', 'Workspace', () => can('access_documents')],
   ['requests', 'Requests', 'Workspace', () => isAdmin() || can('submit_requests')],
   ['team-tasks', 'Team tasks', 'Administration', () => isAdmin()],
+  ['job-roles', 'Job roles', 'Administration', () => isAdmin()],
   ['users', 'Users', 'Administration', () => isAdmin()],
   ['knowledge', 'Knowledge', 'Administration', () => isAdmin()],
   ['feedback', 'Feedback', 'Administration', () => isAdmin()],
@@ -80,7 +81,7 @@ const PAGES = [
 ];
 const LOADERS = {
   dashboard: loadDashboard, assistant: openAssistant, tasks: loadTasks, announcements: loadAnnouncements,
-  documents: loadDocuments, requests: loadRequests, 'team-tasks': loadTeamTasks, users: loadUsers,
+  documents: loadDocuments, requests: loadRequests, 'team-tasks': loadTeamTasks, 'job-roles': loadJobRoles, users: loadUsers,
   knowledge: loadKnow, feedback: loadFeedback, analytics: loadAnalytics, profile: renderProfile, account: () => {}
 };
 const allowed = () => PAGES.filter(p => p[3]());
@@ -92,7 +93,7 @@ async function boot() {
   } catch { return; }
   $('#login').classList.add('hidden'); $('#app').classList.remove('hidden');
   $('#meName').textContent = me.name;
-  $('#meRole').textContent = isAdmin() ? (me.superAdmin ? 'Super admin' : 'Admin') : 'User';
+  $('#meRole').textContent = isAdmin() ? (me.superAdmin ? 'Super admin' : 'Admin') : (me.jobRole || me.jobTitle || 'User');
   $('#meRole').className = 'badge' + (isAdmin() ? ' admin' : '');
   document.querySelectorAll('.admin-only').forEach(e => e.classList.toggle('hidden', !isAdmin()));
   document.querySelectorAll('.user-only').forEach(e => e.classList.toggle('hidden', isAdmin()));
@@ -165,7 +166,7 @@ async function loadDashboard() {
   const d = await api('/dashboard'); const first = me.name.split(' ')[0];
   const go = k => `data-go="${k}"`;
   let cards = `
-    <div class="stat"><div class="k">My role</div><div class="v sm">${esc(isAdmin() ? (me.superAdmin ? 'Super admin' : 'Admin') : 'User')}</div><div class="s">${esc(me.jobTitle || 'No job title set')}</div></div>
+    <div class="stat"><div class="k">My role</div><div class="v sm">${esc(isAdmin() ? (me.superAdmin ? 'Super admin' : 'Admin') : (me.jobRole || me.jobTitle || 'User'))}</div><div class="s">${esc(me.department || 'No department set')}</div></div>
     <div class="stat"><div class="k">My department</div><div class="v sm">${esc(me.department || 'Not set')}</div><div class="s">${me.managerName ? 'Manager: ' + esc(me.managerName) : 'No manager set'}</div></div>`;
   if (d.tasks && (!isAdmin() || d.tasks.total)) cards += `
     <button class="stat" ${go('tasks')}><div class="k">Assigned tasks</div><div class="v">${d.tasks.total}</div><div class="s">${d.tasks.completed} completed</div></button>
@@ -457,9 +458,10 @@ function drawTeamTasks() {
 
 /* ---------- admin: users ---------- */
 async function loadUsers() {
+  jobRoles = (await api('/admin/job-roles')).roles;
   users = (await api('/admin/users')).users;
   $('#userRows').innerHTML = users.map(u => `<tr>
-    <td><b>${esc(u.name)}</b><br><span class="muted">${esc(u.email)}${u.jobTitle ? ' &middot; ' + esc(u.jobTitle) : ''}<br>${esc(u.employeeId)}</span></td>
+    <td><b>${esc(u.name)}</b><br><span class="muted">${esc(u.email)}${u.jobRole || u.jobTitle ? ' &middot; ' + esc(u.jobRole || u.jobTitle) : ''}<br>${esc(u.employeeId)}</span></td>
     <td><span class="badge ${u.role === 'admin' ? 'admin' : ''}">${u.role === 'admin' ? (u.superAdmin ? 'Super admin' : 'Admin') : 'User'}</span>${u.active ? '' : ' <span class="badge off">Disabled</span>'}</td>
     <td>${esc(u.department || '-')}${u.managerName ? `<br><span class="muted">Mgr: ${esc(u.managerName)}</span>` : ''}</td>
     <td>${u.role === 'admin' ? 'All features' : (u.permissions.length ? u.permissions.map(p => esc(catalog[p]?.label || p)).join(', ') : '<span class="muted">None granted</span>')}</td>
@@ -473,6 +475,22 @@ async function loadUsers() {
     try { await api('/admin/users/' + u.id, { method: 'DELETE' }); toast('User deleted'); loadUsers(); } catch (e) { toast(e.message); }
   });
 }
+async function loadJobRoles() {
+  jobRoles = (await api('/admin/job-roles')).roles;
+  $('#jobRoleRows').innerHTML = jobRoles.map(r => `<tr><td><b>${esc(r.name)}</b>${r.active ? '' : ' <span class="badge off">Inactive</span>'}</td><td>${esc(r.department)}</td><td>${r.permissions.map(p => esc(catalog[p]?.label || p)).join(', ') || 'None'}</td><td><button class="btn ghost small" data-jredit="${r.id}">Edit</button> <button class="btn danger small" data-jrdel="${r.id}">Delete</button></td></tr>`).join('') || '<tr><td colspan="4" class="empty">No job roles defined yet.</td></tr>';
+  document.querySelectorAll('[data-jredit]').forEach(b => b.onclick = () => openJobRole(jobRoles.find(r => r.id === b.dataset.jredit)));
+  document.querySelectorAll('[data-jrdel]').forEach(b => b.onclick = async () => { const r = jobRoles.find(x => x.id === b.dataset.jrdel); if (!confirm(`Delete ${r.name}? Assigned users keep their department and access.`)) return; try { await api('/admin/job-roles/' + r.id, {method:'DELETE'}); toast('Role deleted'); loadJobRoles(); } catch(e) { toast(e.message); } });
+}
+function openJobRole(r) {
+  editingJobRole = r || null; $('#jobRoleTitle').textContent = r ? 'Edit ' + r.name : 'Define job role';
+  $('#jrName').value = r?.name || ''; fill($('#jrDept'), deptOpts(), r?.department || cfg.departments[0]);
+  const have = r?.permissions || defaultPerms;
+  $('#jrPerms').innerHTML = Object.entries(catalog).map(([k,p]) => `<label><input type="checkbox" value="${k}" ${have.includes(k) ? 'checked' : ''}><span>${esc(p.label)}<small>${esc(p.description)}</small></span></label>`).join('');
+  $('#jrErr').textContent = ''; $('#jobRoleDlg').showModal();
+}
+$('#addJobRole').onclick = () => openJobRole(null);
+$('#jrCancel').onclick = () => $('#jobRoleDlg').close();
+$('#jobRoleForm').addEventListener('submit', async e => { e.preventDefault(); $('#jrErr').textContent = ''; const body = {name:$('#jrName').value, department:$('#jrDept').value, permissions:[...$('#jrPerms').querySelectorAll('input:checked')].map(x=>x.value)}; try { await api('/admin/job-roles' + (editingJobRole ? '/' + editingJobRole.id : ''), {method:editingJobRole?'PATCH':'POST', body}); $('#jobRoleDlg').close(); toast('Job role saved'); await loadJobRoles(); } catch(err) { $('#jrErr').textContent = err.message; } });
 function drawAsg() {
   const opt = (list, v) => list.map(x => `<option ${x === v ? 'selected' : ''}>${esc(x)}</option>`).join('');
   $('#uAsg').innerHTML = asgDraft.map((a, i) => `<div class="asg-card">
@@ -488,24 +506,25 @@ function drawAsg() {
 }
 function syncAdminNote() {
   const isAd = $('#uRole').value === 'admin';
-  $('#uPerms').querySelectorAll('input').forEach(i => { i.disabled = isAd; if (isAd) i.checked = true; });
-  $('#adminNote').textContent = isAd ? 'Admins always have access to every feature.' : '';
+  $('#uJobRole').required = !isAd && !editing;
+  $('#uJobRole').disabled = isAd && !!editing;
+  $('#userRoleAccessNote').textContent = isAd ? 'Admins always have access to every feature.' : 'Access is defined by the selected job role. Configure it under Job roles.';
   $('#uSuperWrap').classList.toggle('hidden', !(isAd && me.superAdmin));
 }
 $('#uRole').addEventListener('change', syncAdminNote);
 function openUser(u) {
   editing = u || null; $('#uErr').textContent = '';
   $('#userDlgTitle').textContent = u ? 'Edit ' + u.name : 'Add user';
-  $('#uName').value = u?.name || ''; $('#uJob').value = u?.jobTitle || ''; $('#uEmail').value = u?.email || ''; $('#uEmp').value = u?.employeeId || '';
+  $('#uName').value = u?.name || ''; $('#uEmail').value = u?.email || ''; $('#uEmp').value = u?.employeeId || '';
   fill($('#uDept'), deptOpts(['', 'Not set']), u?.department || '');
+  fill($('#uJobRole'), [['', 'No predefined role'], ...jobRoles.filter(r => r.active || r.id === u?.jobRoleId).map(r => [r.id, `${r.name} · ${r.department}`])], u?.jobRoleId || '');
   fill($('#uMgr'), [['', 'None'], ...users.filter(x => !u || x.id !== u.id).map(x => [x.id, x.name + (x.jobTitle ? ' (' + x.jobTitle + ')' : '')])], u?.managerId || '');
   $('#uJoin').value = u?.joiningDate || '';
   $('#uEmail').disabled = !!u; $('#uRole').value = u?.role || 'user'; $('#uActive').checked = u ? u.active : true; $('#uSuper').checked = !!u?.superAdmin;
+  $('#uJobRole').onchange = () => { const role = jobRoles.find(r => r.id === $('#uJobRole').value); if (role) $('#uDept').value = role.department; };
   $('#uActive').disabled = !!u && u.id === me.id; $('#uRole').disabled = !!u && u.id === me.id;
   $('#uPass').value = ''; $('#uPass').required = !u;
   $('#uPassLabel').textContent = u ? 'New password (leave blank to keep)' : 'Starting password (8+ characters)';
-  const have = u ? u.permissions : defaultPerms;
-  $('#uPerms').innerHTML = Object.entries(catalog).map(([k, p]) => `<label><input type="checkbox" value="${k}" ${have.includes(k) ? 'checked' : ''}><span>${esc(p.label)}<small>${esc(p.description)}</small></span></label>`).join('');
   asgDraft = (u?.assignments || []).map(a => ({ ...a })); drawAsg(); syncAdminNote();
   hidePasswords(); $('#userDlg').showModal();
 }
@@ -515,9 +534,9 @@ $('#uCancel').onclick = () => $('#userDlg').close();
 $('#userForm').addEventListener('submit', async e => {
   e.preventDefault(); $('#uErr').textContent = '';
   const body = {
-    name: $('#uName').value, jobTitle: $('#uJob').value, role: $('#uRole').value, active: $('#uActive').checked,
+    name: $('#uName').value, jobRoleId: $('#uJobRole').value || null, role: $('#uRole').value, active: $('#uActive').checked,
     department: $('#uDept').value, managerId: $('#uMgr').value || null, joiningDate: $('#uJoin').value || null, employeeId: $('#uEmp').value,
-    permissions: [...$('#uPerms').querySelectorAll('input:checked')].map(i => i.value), assignments: asgDraft
+    assignments: asgDraft
   };
   if (me.superAdmin && $('#uRole').value === 'admin') body.superAdmin = $('#uSuper').checked;
   if ($('#uPass').value) body.password = $('#uPass').value;

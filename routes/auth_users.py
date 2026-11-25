@@ -91,6 +91,78 @@ def _super_count():
     return core.db.users.count_documents({"superAdmin": True, "role": "admin"})
 
 
+def _job_role(role_id):
+    if not role_id:
+        return None
+    return core.db.job_roles.find_one({"_id": oid(role_id), "active": {"$ne": False}})
+
+
+@bp.get("/api/admin/job-roles")
+@auth_required(admin=True)
+def list_job_roles():
+    rows = core.db.job_roles.find().sort("name", 1)
+    return jsonify(roles=[{"id": str(r["_id"]), "name": r["name"], "department": r["department"],
+                          "permissions": r.get("permissions", []), "active": r.get("active", True)} for r in rows])
+
+
+@bp.post("/api/admin/job-roles")
+@auth_required(admin=True)
+def create_job_role():
+    d = request.get_json(silent=True) or {}
+    name, dept = str(d.get("name") or "").strip(), str(d.get("department") or "").strip()
+    if not name or len(name) > 80 or dept not in C.DEPARTMENTS:
+        return fail("A role name and a valid department are required.")
+    if core.db.job_roles.find_one({"name_lc": name.casefold()}):
+        return fail("That job role already exists.", 409)
+    doc = {"name": name, "name_lc": name.casefold(), "department": dept,
+           "permissions": clean_perms(d.get("permissions")), "active": True,
+           "createdBy": g.user["email"], "createdAt": now(), "updatedAt": now()}
+    result = core.db.job_roles.insert_one(doc)
+    return jsonify(role={"id": str(result.inserted_id), "name": name, "department": dept,
+                         "permissions": doc["permissions"], "active": True}), 201
+
+
+@bp.patch("/api/admin/job-roles/<rid>")
+@auth_required(admin=True)
+def update_job_role(rid):
+    role = core.db.job_roles.find_one({"_id": oid(rid)})
+    if not role:
+        return fail("Job role not found.", 404)
+    d = request.get_json(silent=True) or {}
+    upd = {"updatedAt": now()}
+    if "name" in d:
+        name = str(d.get("name") or "").strip()
+        if not name or len(name) > 80:
+            return fail("Role name must be 1 to 80 characters.")
+        other = core.db.job_roles.find_one({"name_lc": name.casefold()})
+        if other and other["_id"] != role["_id"]:
+            return fail("That job role already exists.", 409)
+        upd.update(name=name, name_lc=name.casefold())
+    if "department" in d:
+        if d["department"] not in C.DEPARTMENTS:
+            return fail("Unknown department.")
+        upd["department"] = d["department"]
+    if "permissions" in d:
+        upd["permissions"] = clean_perms(d["permissions"])
+    if isinstance(d.get("active"), bool):
+        upd["active"] = d["active"]
+    core.db.job_roles.update_one({"_id": role["_id"]}, {"$set": upd})
+    r = core.db.job_roles.find_one({"_id": role["_id"]})
+    return jsonify(role={"id": str(r["_id"]), "name": r["name"], "department": r["department"],
+                         "permissions": r.get("permissions", []), "active": r.get("active", True)})
+
+
+@bp.delete("/api/admin/job-roles/<rid>")
+@auth_required(admin=True)
+def delete_job_role(rid):
+    role = core.db.job_roles.find_one({"_id": oid(rid)})
+    if not role:
+        return jsonify(ok=True)
+    core.db.job_roles.delete_one({"_id": role["_id"]})
+    core.db.users.update_many({"jobRoleId": role["_id"]}, {"$unset": {"jobRoleId": "", "jobRole": ""}})
+    return jsonify(ok=True)
+
+
 @bp.get("/api/admin/users")
 @auth_required(admin=True)
 def list_users():
@@ -109,6 +181,13 @@ def create_user():
     dept = str(d.get("department") or "").strip()
     if dept and dept not in C.DEPARTMENTS:
         return fail("Unknown department.")
+    job_role = _job_role(d.get("jobRoleId"))
+    if d.get("jobRoleId") and not job_role:
+        return fail("Choose an active job role.")
+    if job_role and dept and dept != job_role["department"]:
+        return fail("Department must match the selected job role.")
+    if job_role:
+        dept = job_role["department"]
     mgr, err = _check_manager(d.get("managerId"))
     if err:
         return fail(err)
@@ -119,9 +198,11 @@ def create_user():
     assignments = clean_assignments(d.get("assignments"))
     doc = {"name": name, "email": email, "passwordHash": hash_pw(pw), "role": role,
            "superAdmin": bool(role == "admin" and d.get("superAdmin") and g.user.get("superAdmin")),
-           "jobTitle": str(d.get("jobTitle") or "").strip(), "department": dept, "employeeId": emp,
+           "jobTitle": job_role["name"] if job_role else str(d.get("jobTitle") or "").strip(),
+           "jobRole": job_role["name"] if job_role else "", "jobRoleId": job_role["_id"] if job_role else None,
+           "department": dept, "employeeId": emp,
            "managerId": mgr, "joiningDate": parse_date(d.get("joiningDate")),
-           "permissions": clean_perms(d.get("permissions")), "assignments": assignments,
+           "permissions": list(job_role.get("permissions", [])) if job_role else clean_perms(d.get("permissions")), "assignments": assignments,
            "active": True, "createdBy": g.user["email"], "createdAt": now(), "updatedAt": now()}
     try:
         res = core.db.users.insert_one(doc)
@@ -153,6 +234,16 @@ def update_user(uid):
         if dept and dept not in C.DEPARTMENTS:
             return fail("Unknown department.")
         upd["department"] = dept
+    if "jobRoleId" in b:
+        job_role = _job_role(b.get("jobRoleId"))
+        if b.get("jobRoleId") and not job_role:
+            return fail("Choose an active job role.")
+        upd["jobRoleId"] = job_role["_id"] if job_role else None
+        upd["jobRole"] = job_role["name"] if job_role else ""
+        if job_role:
+            upd["jobTitle"] = job_role["name"]
+            upd["department"] = job_role["department"]
+            upd["permissions"] = list(job_role.get("permissions", []))
     if "employeeId" in b:
         emp = str(b.get("employeeId") or "").strip()[:30]
         if emp:
@@ -180,7 +271,7 @@ def update_user(uid):
     upd["superAdmin"] = want_super
     if isinstance(b.get("active"), bool):
         upd["active"] = b["active"]
-    if "permissions" in b:
+    if "permissions" in b and "jobRoleId" not in b:
         upd["permissions"] = clean_perms(b["permissions"])
     if "assignments" in b:
         new_asg = clean_assignments(b["assignments"])

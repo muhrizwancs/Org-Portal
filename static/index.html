@@ -151,6 +151,12 @@
     </section>
 
     <!-- Admin: users -->
+    <section id="v-job-roles" class="hidden">
+      <div class="bar"><div><h2>Job roles</h2><p class="sub" style="margin:0">Define a job title, home department and page access once, then assign it to new users.</p></div><button class="btn" id="addJobRole">Define role</button></div>
+      <div class="panel scroll"><table><thead><tr><th>Role</th><th>Department</th><th>Access</th><th></th></tr></thead><tbody id="jobRoleRows"></tbody></table></div>
+    </section>
+
+    <!-- Admin: users -->
     <section id="v-users" class="hidden">
       <div class="bar">
         <div><h2>Users</h2><p class="sub" style="margin:0">Create accounts, set department and manager, control page access and assign tasks.</p></div>
@@ -201,10 +207,10 @@
     <h3 id="userDlgTitle"></h3>
     <div class="grid2">
       <label>Name<input type="text" id="uName" required></label>
-      <label>Job title<input type="text" id="uJob"></label>
       <label>Email<input type="email" id="uEmail" required></label>
       <label>Employee ID<input type="text" id="uEmp" placeholder="Automatic if empty"></label>
       <label>Department<select id="uDept"></select></label>
+      <label>Job role<select id="uJobRole"></select></label>
       <label>Manager<select id="uMgr"></select></label>
       <label>Joining date<input type="date" id="uJoin"></label>
       <label>Role
@@ -214,10 +220,21 @@
       <label style="align-content:end"><span style="display:flex;gap:8px;font-weight:400;align-items:center"><input type="checkbox" id="uActive"> Account is active</span></label>
       <label style="align-content:end" id="uSuperWrap"><span style="display:flex;gap:8px;font-weight:400;align-items:center"><input type="checkbox" id="uSuper"> Super admin (approves knowledge)</span></label>
     </div>
-    <fieldset><legend>Access (pages and features)</legend><div class="checks" id="uPerms"></div><small class="muted" id="adminNote"></small></fieldset>
+    <p class="muted" id="userRoleAccessNote">Access is defined by the selected job role. Configure it under Job roles.</p>
     <fieldset><legend>Tasks</legend><div id="uAsg"></div><button type="button" class="btn ghost small" id="addAsg">Add task</button></fieldset>
     <div class="err" id="uErr" role="alert"></div>
     <div class="foot"><button type="button" class="btn ghost" id="uCancel">Cancel</button><button class="btn" type="submit">Save changes</button></div>
+  </form>
+</dialog>
+
+<dialog id="jobRoleDlg">
+  <form id="jobRoleForm" method="dialog">
+    <h3 id="jobRoleTitle">Define job role</h3>
+    <label>Role name<input id="jrName" maxlength="80" placeholder="AI Engineer" required></label>
+    <label>Department<select id="jrDept" required></select></label>
+    <fieldset><legend>Default access</legend><div class="checks" id="jrPerms"></div></fieldset>
+    <div class="err" id="jrErr" role="alert"></div>
+    <div class="foot"><button type="button" class="btn ghost" id="jrCancel">Cancel</button><button class="btn" type="submit">Save role</button></div>
   </form>
 </dialog>
 

@@ -34,8 +34,7 @@ Sign in as `boss@org.com` / `BossPass123!` (admin) or `sara@org.com` / `Password
 
 ## Pages and who can open them
 
-The admin ticks the pages each person may use under **Users > Edit > Access**. Changes apply immediately.
-New users start with the common ones pre-ticked.
+Admins define reusable job roles under **Job roles**, including a department and default page access. When creating a non-admin user, the admin selects a defined job role; its title, department, and access are assigned together. User creation does not offer separate permission checkboxes.
 
 | Page | Access setting | What it does |
 |---|---|---|
@@ -52,6 +51,8 @@ New users start with the common ones pre-ticked.
 Admin only: **Approvals** (decide requests), **Team tasks**, **Users**, **Knowledge**, **Feedback**, **Analytics**.
 
 ## Roles
+
+Job roles (for example, **AI Engineer** in **IT**) are organization-defined templates. They are separate from account types and supply a user's job title, department, and default feature access when assigned.
 
 * **Super admin:** the first admin. Approves or rejects knowledge entries written by other admins, and can promote
   other super admins (there is always at least one).
