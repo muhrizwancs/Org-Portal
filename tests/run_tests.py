@@ -17,6 +17,7 @@ os.environ["ADMIN_PASSWORD"] = "BossPass123!"
 
 import app as portal                       # noqa: E402
 from pymongo import MongoClient            # noqa: E402
+from rag.seed_documents import SEED_DOCUMENTS  # noqa: E402
 
 db = portal.init_db(client=MongoClient(), db_name="test")
 client = portal.app.test_client()
@@ -78,10 +79,13 @@ def make_docx(text):
     return b.getvalue()
 
 
-def upload(admin, title, dept, filename, data, category="Policy", ctype="application/octet-stream"):
-    return call("POST", "/api/admin/documents", admin, data={
-        "title": title, "department": dept, "category": category, "file": (io.BytesIO(data), filename, ctype)},
-        content_type="multipart/form-data")
+def upload(admin, title, dept, filename, data, category="Policy", ctype="application/octet-stream", role_ids=None):
+    form = {
+        "title": title, "department": dept, "category": category, "file": (io.BytesIO(data), filename, ctype)
+    }
+    if role_ids:
+        form["jobRoleIds"] = role_ids
+    return call("POST", "/api/admin/documents", admin, data=form, content_type="multipart/form-data")
 
 
 def ask(token, q, chat_id=None):
@@ -96,15 +100,39 @@ admin_doc = db.users.find_one({"email": "boss@org.com"})
 check("first admin is super admin with an employee id", admin_doc.get("superAdmin") and admin_doc["employeeId"] == "EMP-0001")
 check("seed knowledge loaded and approved", db.knowledge.count_documents({"status": "approved"}) >= 15)
 check("department-tagged seed entry", db.knowledge.find_one({"title": "How to request leave"})["department"] == "HR")
+predefined_roles = {r["name"]: r for r in db.job_roles.find({"predefined": True})}
+check("software-house starter roles are seeded", {"Software Engineer", "QA Engineer", "DevOps Engineer",
+      "Project Manager", "UI/UX Designer", "HR Specialist", "Finance Officer", "Sales Executive"} <= set(predefined_roles))
+seed_docs = list(db.documents.find({"seedKey": {"$exists": True}}))
+check("sample documents are indexed and role-scoped",
+      len(seed_docs) == len(SEED_DOCUMENTS) and all(d["indexed"] and d["jobRoleIds"] for d in seed_docs))
+check("sample documents cover every Document Center category",
+      {"Handbook", "Policy", "Form", "Guide", "Other"} <= {doc["category"] for doc in seed_docs})
+portal.sync_seed_documents(db, portal.core.fs)
+portal.sync_seed_job_roles(db)
+check("starter roles and documents seed idempotently",
+      db.job_roles.count_documents({"predefined": True}) == len(predefined_roles)
+      and db.documents.count_documents({"seedKey": {"$exists": True}}) == len(SEED_DOCUMENTS))
 
 A = login("boss@org.com", "BossPass123!")
-c, d, _ = call("GET", "/api/me", A)
-check("/api/me returns catalog, defaults and config", c == 200 and "view_tasks" in d["permissionCatalog"]
-      and "HR" in d["config"]["departments"] and "view_dashboard" in d["defaultPerms"])
+c, me_data, _ = call("GET", "/api/me", A)
+check("/api/me returns catalog, defaults and config", c == 200 and "view_tasks" in me_data["permissionCatalog"]
+      and "HR" in me_data["config"]["departments"] and "view_dashboard" in me_data["defaultPerms"])
+c, d, _ = call("POST", "/api/admin/job-roles", A, {
+    "name": "Data Analyst", "department": "Operations", "permissions": ["view_dashboard"]})
+custom_role_id = d.get("role", {}).get("id")
+check("new custom job roles are not starter roles", c == 201 and not d["role"]["predefined"])
+c, d, _ = call("PATCH", f"/api/admin/job-roles/{custom_role_id}", A, {"predefined": True})
+check("custom job role can be marked as a starter role", c == 200 and d["role"]["predefined"])
+c, d, _ = call("GET", "/api/admin/job-roles", A)
+check("starter role marker is returned for user assignment grouping",
+      next((r["predefined"] for r in d["roles"] if r["id"] == custom_role_id), False))
+c, d, _ = call("PATCH", f"/api/admin/job-roles/{custom_role_id}", A, {"predefined": False})
+check("starter role marker can be removed", c == 200 and not d["role"]["predefined"])
 
 # ===================================================================== users / profile
 print("\nUsers and profile")
-boss_id = d["user"]["id"]
+boss_id = me_data["user"]["id"]
 sara = mk_user(A, "Sara Khan", "sara@org.com", "HR", jobTitle="HR Executive", managerId=boss_id, joiningDate="2025-03-01")
 omar = mk_user(A, "Omar Ali", "omar@org.com", "IT", jobTitle="Sysadmin")
 ali = mk_user(A, "Ali Raza", "ali@org.com", "Sales", perms=[])          # no page access at all
@@ -236,6 +264,12 @@ r = ask(S, "Show company holidays")
 check("holidays come from Holiday notices", "Eid holidays" in r["answer"], r["answer"][:200])
 r = ask(S, "What is my department?")
 check("department answer", "HR" in r["answer"])
+r = ask(A, "Who am I?")
+check("identity questions still match the user's profile",
+      r["confidence"] > 0 and any(s["title"] == "Your profile and role" for s in r["sources"]))
+r = ask(S, "Who are you?")
+check("assistant identity questions still match greeting knowledge",
+      r["confidence"] > 0 and any(s["title"] == "Greeting and what the assistant does" for s in r["sources"]))
 r = ask(S, "Show latest announcements")
 check("announcements answer", "HR training" in r["answer"] and "Eid holidays" in r["answer"], r["answer"][:200])
 r = ask(A, "who are the users")
@@ -244,6 +278,10 @@ r = ask(S, "who are the users")
 check("user never gets the org overview", not any("overview" in s["title"].lower() for s in r["sources"]) and "Omar" not in r["answer"])
 r = ask(S, "recipe for pizza")
 check("unknown topic is honest", r["confidence"] == 0 and r["sources"] == [])
+r = ask(A, "Who is hiring interns?")
+check("unmatched who-question returns unavailable message",
+      r["confidence"] == 0 and not r["sources"] and "could not find" in r["answer"].lower()
+      and "Muhammad Rizwan" not in r["answer"], r["answer"][:200])
 
 # ===================================================================== chat history
 print("\nChat history")
@@ -407,12 +445,57 @@ c, d, _ = call("GET", "/api/admin/analytics", A)
 check("analytics shape", c == 200 and d["users"]["total"] == 5 and d["questions"]["total"] > 10 and d["questions"]["last24h"] > 10)
 check("most asked questions counted", d["questions"]["top"][0]["count"] >= 2, d["questions"]["top"][:3])
 check("unanswered questions listed", any("pizza" in q["question"] for q in d["questions"]["unanswered"]))
-check("documents / feedback / requests / tasks / knowledge", d["documents"]["total"] == 3 and d["documents"]["searchable"] == 2
+check("documents / feedback / requests / tasks / knowledge",
+      d["documents"]["total"] == 3 + len(SEED_DOCUMENTS) and d["documents"]["searchable"] == 2 + len(SEED_DOCUMENTS)
       and d["feedback"]["down"] == 2 and d["requests"]["Approved"] == 1 and d["requests"]["Cancelled"] == 1
       and d["tasks"]["total"] == 2 and d["knowledge"]["approved"] >= 15)
 check("active users tracked", d["users"]["active7d"] >= 4 and d["users"]["byDepartment"].get("HR") == 1)
 c, _, _ = call("GET", "/api/admin/analytics", S)
 check("analytics is admin only", c == 403)
+
+# ===================================================================== job-role document access
+print("\nJob-role document access")
+hr_role_id = str(predefined_roles["HR Specialist"]["_id"])
+engineer_role_id = str(predefined_roles["Software Engineer"]["_id"])
+call("PATCH", f"/api/admin/users/{sara['id']}", A, {"jobRoleId": hr_role_id})
+call("PATCH", f"/api/admin/users/{omar['id']}", A, {"jobRoleId": engineer_role_id})
+upload_status, custom_doc, _ = upload(A, "HR role memo", "all", "hr_role_memo.txt",
+                                      b"Only the HR Specialist role can read this internal memo.", role_ids=[hr_role_id])
+hr_status, hr_data, _ = call("GET", "/api/documents", S)
+engineer_status, engineer_data, _ = call("GET", "/api/documents", O)
+download_status, _, _ = call("GET", f"/api/documents/{custom_doc['document']['id']}/download", O)
+check("uploaded document accepts explicit role assignments",
+      upload_status == 201 and custom_doc["document"]["jobRoleIds"] == [hr_role_id]
+      and custom_doc["document"]["jobRoles"] == ["HR Specialist"])
+check("uploaded role-only document is restricted to that job role",
+      hr_status == 200 and engineer_status == 200
+      and any(doc["id"] == custom_doc["document"]["id"] for doc in hr_data["documents"])
+      and all(doc["id"] != custom_doc["document"]["id"] for doc in engineer_data["documents"])
+      and download_status == 404)
+hr_titles = {doc["title"] for doc in hr_data["documents"]}
+engineer_titles = {doc["title"] for doc in engineer_data["documents"]}
+check("documents assigned to a role are visible to that role",
+      "Employee Records Handling Standard (Sample)" in hr_titles
+      and "Secure Software Development Standard (Sample)" in engineer_titles)
+check("role-scoped documents stay hidden from other roles",
+      "Secure Software Development Standard (Sample)" not in hr_titles
+      and "Employee Records Handling Standard (Sample)" not in engineer_titles)
+inactive_status, _, _ = call("PATCH", f"/api/admin/job-roles/{hr_role_id}", A, {"active": False})
+inactive_download, _, _ = call("GET", f"/api/documents/{custom_doc['document']['id']}/download", S)
+check("deactivating a role revokes its document access", inactive_status == 200 and inactive_download == 404)
+call("PATCH", f"/api/admin/job-roles/{hr_role_id}", A, {"active": True})
+delete_status, _, _ = call("DELETE", f"/api/admin/job-roles/{hr_role_id}", A)
+check("a role assigned to documents cannot be deleted", delete_status == 409)
+secure_doc = db.documents.find_one({"seedKey": "secure-development"})
+c, _, _ = call("GET", f"/api/documents/{str(secure_doc['_id'])}/download", S)
+check("download enforces role assignment", c == 404)
+r = ask(O, "How should engineers handle secrets in source code?")
+check("assistant answers from role-assigned policy with a source",
+      any(s.get("file") == "secure_software_development_standard.txt" for s in r["sources"])
+      and "secrets" in r["answer"].lower(), r["answer"][:200])
+r = ask(S, "How should engineers handle secrets in source code?")
+check("assistant cannot retrieve policy text outside the assigned role",
+      not any(s.get("file") == "secure_software_development_standard.txt" for s in r["sources"]))
 
 # ===================================================================== misc security
 print("\nSecurity and limits")

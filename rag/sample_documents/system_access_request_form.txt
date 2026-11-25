@@ -1,0 +1,20 @@
+SAMPLE FORM — System Access Request
+Use this form to request access. Do not include passwords, private keys, or authentication codes.
+
+Requestor name:
+Job role and department:
+System, application, or repository:
+Access requested (view, edit, administrator, or other):
+Business purpose and related project:
+Information or data the access will involve:
+Requested start date:
+Requested end date or review date:
+Manager approval:
+System owner approval:
+Access provisioned by and date:
+Access reviewed or removed by and date:
+
+Instructions
+Submit the completed request through the organization's approved request channel. The manager and system owner should confirm the business need and scope before access is granted. Use the shortest suitable duration and review temporary access when the work is complete.
+
+This is an illustrative template. Follow the organization's actual approval process and retention requirements.

@@ -1,0 +1,15 @@
+SAMPLE INTERNAL POLICY — Privacy and Data Handling
+This is an illustrative company template, not a statement of legal or regulatory requirements.
+
+Handling principles
+- Collect and use only the information needed for an approved business purpose.
+- Restrict personal and confidential information to people who need it for their work.
+- Use approved company storage and transfer methods; do not put sensitive data in public links, personal accounts, or unapproved tools.
+- Use synthetic or de-identified data wherever practical for design, development, demonstrations, and testing.
+- Follow the company's approved retention and deletion schedule. Do not keep copies longer than needed.
+
+Requests and incidents
+Route requests to access, correct, export, or delete personal information to the designated privacy contact. Promptly report suspected loss, disclosure, or unauthorized access through the company's incident channel. Preserve relevant records and do not investigate or notify external parties independently.
+
+Questions about this sample
+The company owner must adapt this template to actual data, contracts, and applicable law before adopting it.

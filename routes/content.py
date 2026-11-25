@@ -94,6 +94,8 @@ def delete_announcement(aid):
 def ser_doc(d):
     return {"id": str(d["_id"]), "title": d["title"], "category": d.get("category", "Other"),
             "department": d.get("department", "all"), "filename": d["filename"], "size": d.get("size", 0),
+            "jobRoleIds": [str(rid) for rid in d.get("jobRoleIds", [])],
+            "jobRoles": [r["name"] for r in core.db.job_roles.find({"_id": {"$in": d.get("jobRoleIds", [])}})],
             "version": d.get("version", 1), "indexed": bool(d.get("indexed")), "indexNote": d.get("indexNote", ""),
             "chunkCount": d.get("chunkCount", 0), "uploadedByName": d.get("uploadedByName", ""),
             "createdAt": iso(d.get("createdAt")), "updatedAt": iso(d.get("updatedAt"))}
@@ -136,7 +138,7 @@ def _read_upload():
     return name, data
 
 
-def _meta_fields(form):
+def _meta_fields(form, allow_inactive_roles=False):
     title = str(form.get("title") or "").strip()
     cat = form.get("category") or "Other"
     dept = form.get("department") or "all"
@@ -144,7 +146,21 @@ def _meta_fields(form):
         return None, "Choose a category."
     if dept != "all" and dept not in C.DEPARTMENTS:
         return None, "Unknown department."
-    return {"title": title[:150], "category": cat, "department": dept}, None
+    raw_role_ids = form.getlist("jobRoleIds") if hasattr(form, "getlist") else form.get("jobRoleIds", [])
+    if isinstance(raw_role_ids, str):
+        raw_role_ids = [raw_role_ids]
+    role_ids = []
+    for raw_id in raw_role_ids or []:
+        role_id = oid(raw_id)
+        role_filter = {"_id": role_id}
+        if not allow_inactive_roles:
+            role_filter["active"] = {"$ne": False}
+        role = core.db.job_roles.find_one(role_filter) if role_id else None
+        if not role:
+            return None, "Choose active job roles for document access."
+        if role["_id"] not in role_ids:
+            role_ids.append(role["_id"])
+    return {"title": title[:150], "category": cat, "department": dept, "jobRoleIds": role_ids}, None
 
 
 def _index(doc_id, filename, data, department):
@@ -191,7 +207,8 @@ def update_document(did):
         return fail("Document not found.", 404)
     meta, err = _meta_fields({"title": request.form.get("title", d["title"]),
                               "category": request.form.get("category", d.get("category", "Other")),
-                              "department": request.form.get("department", d.get("department", "all"))})
+                              "department": request.form.get("department", d.get("department", "all")),
+                              "jobRoleIds": request.form.getlist("jobRoleIds")}, allow_inactive_roles=True)
     if err:
         return fail(err)
     meta["title"] = meta["title"] or d["title"]

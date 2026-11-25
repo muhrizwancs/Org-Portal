@@ -324,14 +324,22 @@ $('#annForm').addEventListener('submit', async e => {
 
 /* ---------- documents ---------- */
 let docs = [], docEditing = null;
-async function loadDocuments() { docs = (await api('/documents')).documents; drawDocs(); }
+async function loadDocuments() {
+  const [documentData, roleData] = await Promise.all([
+    api('/documents'),
+    isAdmin() ? api('/admin/job-roles') : Promise.resolve({ roles: [] })
+  ]);
+  docs = documentData.documents;
+  if (isAdmin()) jobRoles = roleData.roles;
+  drawDocs();
+}
 function drawDocs() {
   const q = $('#docSearch').value.trim().toLowerCase(), cat = $('#docCat').value;
   const list = docs.filter(d => (!cat || d.category === cat) && (!q || (d.title + ' ' + d.filename).toLowerCase().includes(q)));
   $('#docRows').innerHTML = list.map(d => `<tr>
     <td><b>${esc(d.title)}</b>${d.version > 1 ? ` <span class="tag">v${d.version}</span>` : ''}<br><span class="muted">${esc(d.filename)} &middot; ${esc(size(d.size))}</span>
       ${isAdmin() ? `<br>${d.indexed ? `<span class="tag ok" title="${d.chunkCount} text pieces indexed">Searchable by assistant</span>` : `<span class="tag warn" title="${esc(d.indexNote)}">Not searchable</span>`}` : ''}</td>
-    <td>${esc(d.category)}</td><td>${d.department === 'all' ? 'Everyone' : esc(d.department)}</td><td>${esc(fmtDate(d.updatedAt))}</td>
+    <td>${esc(d.category)}</td><td>${d.jobRoles?.length ? esc(d.jobRoles.join(', ')) + (d.department === 'all' ? '' : ` · ${esc(d.department)} department`) : (d.department === 'all' ? 'Everyone' : esc(d.department))}</td><td>${esc(fmtDate(d.updatedAt))}</td>
     <td style="white-space:nowrap"><button class="btn small" data-dl="${d.id}">Download</button>
       ${isAdmin() ? `<button class="btn ghost small" data-ed="${d.id}">Edit</button><button class="btn danger small" data-rm="${d.id}">Delete</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="5" class="empty">No documents found.</td></tr>';
   $('#docRows').querySelectorAll('[data-dl]').forEach(b => b.onclick = () => download(docs.find(d => d.id === b.dataset.dl)));
@@ -352,6 +360,10 @@ $('#docSearch').oninput = drawDocs; $('#docCat').onchange = drawDocs;
 function openDoc(d) {
   docEditing = d || null; $('#docForm').reset(); $('#dErr').textContent = '';
   fill($('#dCat'), cfg.docCategories.map(c => [c, c]), d ? d.category : 'Policy'); fill($('#dDept'), deptOpts(['all', 'Everyone']), d ? d.department : 'all');
+  const allowed = d?.jobRoleIds || [];
+  $('#dRoles').innerHTML = jobRoles.filter(r => r.active || allowed.includes(r.id)).map(r =>
+    `<label><input type="checkbox" value="${esc(r.id)}" ${allowed.includes(r.id) ? 'checked' : ''}><span>${esc(r.name)}<small>${esc(r.department)}${r.active ? '' : ' · inactive'}</small></span></label>`
+  ).join('') || '<span class="muted">No active job roles. Define a role first.</span>';
   $('#docDlgTitle').textContent = d ? 'Edit document' : 'Upload document';
   $('#dFileLabel').textContent = d ? 'Replace file (optional, becomes the next version)' : 'File';
   $('#dTitle').value = d ? d.title : ''; $('#dSave').textContent = d ? 'Save changes' : 'Upload'; $('#docDlg').showModal();
@@ -363,6 +375,7 @@ $('#docForm').addEventListener('submit', async e => {
   const f = $('#dFile').files[0];
   if (!docEditing && !f) { $('#dErr').textContent = 'Choose a file to upload.'; return; }
   const fd = new FormData(); fd.append('title', $('#dTitle').value); fd.append('category', $('#dCat').value); fd.append('department', $('#dDept').value);
+  $('#dRoles').querySelectorAll('input:checked').forEach(input => fd.append('jobRoleIds', input.value));
   if (f) fd.append('file', f);
   $('#dSave').disabled = true;
   try {
@@ -383,7 +396,9 @@ function flow(r) {
 async function loadRequests() {
   if (isAdmin()) {
     $('#reqTitle').textContent = 'Approvals'; $('#reqSub').textContent = 'Review leave, access, training and equipment requests.';
-    fill($('#reqStatus'), [['Pending', 'Pending'], ['Approved', 'Approved'], ['Rejected', 'Rejected'], ['Cancelled', 'Cancelled'], ['', 'All']], $('#reqStatus').value || 'Pending');
+    const statusFilter = $('#reqStatus');
+    const selectedStatus = statusFilter.options.length ? statusFilter.value : 'Pending';
+    fill(statusFilter, [['Pending', 'Pending'], ['Approved', 'Approved'], ['Rejected', 'Rejected'], ['Cancelled', 'Cancelled'], ['', 'All']], selectedStatus);
     reqs = (await api('/admin/requests' + ($('#reqStatus').value ? '?status=' + $('#reqStatus').value : ''))).requests;
   } else {
     $('#reqTitle').textContent = 'Requests'; $('#reqSub').textContent = 'Send a request and follow it until the admin decides.';
@@ -477,20 +492,21 @@ async function loadUsers() {
 }
 async function loadJobRoles() {
   jobRoles = (await api('/admin/job-roles')).roles;
-  $('#jobRoleRows').innerHTML = jobRoles.map(r => `<tr><td><b>${esc(r.name)}</b>${r.active ? '' : ' <span class="badge off">Inactive</span>'}</td><td>${esc(r.department)}</td><td>${r.permissions.map(p => esc(catalog[p]?.label || p)).join(', ') || 'None'}</td><td><button class="btn ghost small" data-jredit="${r.id}">Edit</button> <button class="btn danger small" data-jrdel="${r.id}">Delete</button></td></tr>`).join('') || '<tr><td colspan="4" class="empty">No job roles defined yet.</td></tr>';
+  $('#jobRoleRows').innerHTML = jobRoles.map(r => `<tr><td><b>${esc(r.name)}</b>${r.predefined ? ' <span class="tag info">Starter role</span>' : ''}${r.active ? '' : ' <span class="badge off">Inactive</span>'}</td><td>${esc(r.department)}</td><td>${r.permissions.map(p => esc(catalog[p]?.label || p)).join(', ') || 'None'}</td><td><button class="btn ghost small" data-jredit="${r.id}">Edit</button> <button class="btn danger small" data-jrdel="${r.id}">Delete</button></td></tr>`).join('') || '<tr><td colspan="4" class="empty">No job roles defined yet.</td></tr>';
   document.querySelectorAll('[data-jredit]').forEach(b => b.onclick = () => openJobRole(jobRoles.find(r => r.id === b.dataset.jredit)));
-  document.querySelectorAll('[data-jrdel]').forEach(b => b.onclick = async () => { const r = jobRoles.find(x => x.id === b.dataset.jrdel); if (!confirm(`Delete ${r.name}? Assigned users keep their department and access.`)) return; try { await api('/admin/job-roles/' + r.id, {method:'DELETE'}); toast('Role deleted'); loadJobRoles(); } catch(e) { toast(e.message); } });
+  document.querySelectorAll('[data-jrdel]').forEach(b => b.onclick = async () => { const r = jobRoles.find(x => x.id === b.dataset.jrdel); if (!confirm(`Delete ${r.name}? Users keep their current access. Reassign documents restricted to this role first.`)) return; try { await api('/admin/job-roles/' + r.id, {method:'DELETE'}); toast('Role deleted'); loadJobRoles(); } catch(e) { toast(e.message); } });
 }
 function openJobRole(r) {
   editingJobRole = r || null; $('#jobRoleTitle').textContent = r ? 'Edit ' + r.name : 'Define job role';
   $('#jrName').value = r?.name || ''; fill($('#jrDept'), deptOpts(), r?.department || cfg.departments[0]);
+  $('#jrPredefined').checked = !!r?.predefined;
   const have = r?.permissions || defaultPerms;
   $('#jrPerms').innerHTML = Object.entries(catalog).map(([k,p]) => `<label><input type="checkbox" value="${k}" ${have.includes(k) ? 'checked' : ''}><span>${esc(p.label)}<small>${esc(p.description)}</small></span></label>`).join('');
   $('#jrErr').textContent = ''; $('#jobRoleDlg').showModal();
 }
 $('#addJobRole').onclick = () => openJobRole(null);
 $('#jrCancel').onclick = () => $('#jobRoleDlg').close();
-$('#jobRoleForm').addEventListener('submit', async e => { e.preventDefault(); $('#jrErr').textContent = ''; const body = {name:$('#jrName').value, department:$('#jrDept').value, permissions:[...$('#jrPerms').querySelectorAll('input:checked')].map(x=>x.value)}; try { await api('/admin/job-roles' + (editingJobRole ? '/' + editingJobRole.id : ''), {method:editingJobRole?'PATCH':'POST', body}); $('#jobRoleDlg').close(); toast('Job role saved'); await loadJobRoles(); } catch(err) { $('#jrErr').textContent = err.message; } });
+$('#jobRoleForm').addEventListener('submit', async e => { e.preventDefault(); $('#jrErr').textContent = ''; const body = {name:$('#jrName').value, department:$('#jrDept').value, permissions:[...$('#jrPerms').querySelectorAll('input:checked')].map(x=>x.value), predefined:$('#jrPredefined').checked}; try { await api('/admin/job-roles' + (editingJobRole ? '/' + editingJobRole.id : ''), {method:editingJobRole?'PATCH':'POST', body}); $('#jobRoleDlg').close(); toast('Job role saved'); await loadJobRoles(); } catch(err) { $('#jrErr').textContent = err.message; } });
 function drawAsg() {
   const opt = (list, v) => list.map(x => `<option ${x === v ? 'selected' : ''}>${esc(x)}</option>`).join('');
   $('#uAsg').innerHTML = asgDraft.map((a, i) => `<div class="asg-card">
@@ -517,7 +533,17 @@ function openUser(u) {
   $('#userDlgTitle').textContent = u ? 'Edit ' + u.name : 'Add user';
   $('#uName').value = u?.name || ''; $('#uEmail').value = u?.email || ''; $('#uEmp').value = u?.employeeId || '';
   fill($('#uDept'), deptOpts(['', 'Not set']), u?.department || '');
-  fill($('#uJobRole'), [['', 'No predefined role'], ...jobRoles.filter(r => r.active || r.id === u?.jobRoleId).map(r => [r.id, `${r.name} · ${r.department}`])], u?.jobRoleId || '');
+  const availableRoles = jobRoles.filter(r => r.active || r.id === u?.jobRoleId);
+  const roleOptions = roles => roles.map(r =>
+    `<option value="${esc(r.id)}">${esc(r.name)} · ${esc(r.department)}${r.active ? '' : ' (inactive)'}</option>`
+  ).join('');
+  const roleGroups = [
+    ['Starter roles', availableRoles.filter(r => r.predefined)],
+    ['Other roles', availableRoles.filter(r => !r.predefined)]
+  ].filter(([, roles]) => roles.length)
+    .map(([label, roles]) => `<optgroup label="${label}">${roleOptions(roles)}</optgroup>`).join('');
+  $('#uJobRole').innerHTML = `<option value="">No predefined role</option>${roleGroups}`;
+  $('#uJobRole').value = u?.jobRoleId || '';
   fill($('#uMgr'), [['', 'None'], ...users.filter(x => !u || x.id !== u.id).map(x => [x.id, x.name + (x.jobTitle ? ' (' + x.jobTitle + ')' : '')])], u?.managerId || '');
   $('#uJoin').value = u?.joiningDate || '';
   $('#uEmail').disabled = !!u; $('#uRole').value = u?.role || 'user'; $('#uActive').checked = u ? u.active : true; $('#uSuper').checked = !!u?.superAdmin;

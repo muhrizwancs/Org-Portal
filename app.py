@@ -14,6 +14,9 @@ from pymongo.errors import ConfigurationError                   # noqa: E402
 import core                                                     # noqa: E402
 from core import fail, hash_pw, next_employee_id, now          # noqa: E402
 from permissions import UPGRADE_GRANTS                          # noqa: E402
+from role_presets import PREDEFINED_JOB_ROLES                   # noqa: E402
+from rag.extract import chunk_pages, extract_pages              # noqa: E402
+from rag.seed_documents import SEED_DOCUMENTS                   # noqa: E402
 from rag.seed_knowledge import SEED, SEED_VERSION               # noqa: E402
 from routes import admin, auth_users, chat, content, work       # noqa: E402
 
@@ -83,6 +86,50 @@ def sync_seed_knowledge(db):
         print(f"Assistant knowledge: {added} added, {updated} refreshed.")
 
 
+def sync_seed_job_roles(db):
+    """Add starter templates without overwriting roles configured by an admin."""
+    for role in PREDEFINED_JOB_ROLES:
+        name_lc = role["name"].casefold()
+        if db.job_roles.find_one({"name_lc": name_lc}):
+            continue
+        db.job_roles.insert_one({
+            **role, "name_lc": name_lc, "active": True, "predefined": True,
+            "createdBy": "system", "createdAt": now(), "updatedAt": now(),
+        })
+
+
+def sync_seed_documents(db, fs):
+    """Install missing built-in sample documents and index them for role-scoped answers."""
+    roles = {r["name"]: r["_id"] for r in db.job_roles.find()}
+    for item in SEED_DOCUMENTS:
+        if db.documents.find_one({"seedKey": item["key"]}):
+            continue
+        role_ids = [roles[name] for name in item["job_roles"] if name in roles]
+        if len(role_ids) != len(item["job_roles"]):
+            raise RuntimeError(f"Missing predefined job role for sample document {item['key']}.")
+        filename = item["filename"]
+        with open(os.path.join(BASE, "rag", "sample_documents", filename), "rb") as source:
+            data = source.read()
+        file_id = fs.put(data, filename=filename, content_type="text/plain")
+        stamp = now()
+        result = db.documents.insert_one({
+            "seedKey": item["key"], "title": item["title"], "category": item["category"], "department": "all",
+            "jobRoleIds": role_ids, "filename": filename, "contentType": "text/plain", "size": len(data),
+            "fileId": file_id, "version": 1, "indexed": False, "indexNote": "", "chunkCount": 0,
+            "uploadedBy": "system", "uploadedByName": "Built-in sample", "createdAt": stamp, "updatedAt": stamp,
+        })
+        pages, note = extract_pages(filename, data)
+        chunks = chunk_pages(pages)
+        if chunks:
+            db.doc_chunks.insert_many([
+                {"docId": result.inserted_id, "page": chunk["page"], "n": index, "text": chunk["text"]}
+                for index, chunk in enumerate(chunks)
+            ])
+        db.documents.update_one({"_id": result.inserted_id}, {"$set": {
+            "indexed": bool(chunks), "indexNote": note, "chunkCount": len(chunks),
+        }})
+
+
 def migrate(db):
     """Upgrade data created by the first version of the portal (safe to run on every start)."""
     # the oldest admin becomes the super admin (approves new knowledge) if nobody is yet
@@ -137,6 +184,8 @@ def init_db(client=None, db_name=None):
         print(f"Created first admin: {email}")
     migrate(db)
     sync_seed_knowledge(db)
+    sync_seed_job_roles(db)
+    sync_seed_documents(db, core.fs)
     return db
 
 

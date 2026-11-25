@@ -237,12 +237,21 @@ def next_employee_id():
 
 # ---------------------------------------------------------------- what a person may see (shared by pages and the assistant)
 def visible_documents(user):
-    """Documents the person may see: 'all' ones plus their own department's. Admins see everything."""
+    """Apply document role and department scopes; admins see everything."""
     dept = user.get("department") or ""
+    role = db.job_roles.find_one({"_id": user.get("jobRoleId"), "active": {"$ne": False}}) if user.get("jobRoleId") else None
+    role_id = role["_id"] if role else None
     out = []
     for d in db.documents.find().sort("createdAt", -1):
-        if is_admin(user) or d.get("department", "all") in ("all", "", dept):
+        if is_admin(user):
             out.append(d)
+            continue
+        allowed_roles = d.get("jobRoleIds") or []
+        if allowed_roles and role_id not in allowed_roles:
+            continue
+        if d.get("department", "all") not in ("all", "", dept):
+            continue
+        out.append(d)
     return out
 
 

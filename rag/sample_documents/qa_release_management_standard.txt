@@ -1,0 +1,17 @@
+SAMPLE INTERNAL POLICY — QA and Release Management
+This is an illustrative company template, not a statement of legal or regulatory requirements.
+
+Quality checks
+- Define acceptance criteria before implementation and keep test evidence with the work item or release.
+- Run relevant automated tests and document any known failures or approved exceptions.
+- Test changes in a non-production environment before production deployment.
+- Do not use real customer or employee data in tests unless specifically approved and protected.
+
+Change and release controls
+- Every production change has an accountable owner, peer review, test evidence, and an authorized release approval.
+- Record the release version, deployment time, outcome, and rollback plan.
+- Confirm service health after deployment. If a release causes material impact, follow the incident process and record corrective actions.
+- Emergency changes must be documented and reviewed after stabilization.
+
+Questions about this sample
+The company owner must adapt this template to actual systems, contracts, and applicable law before adopting it.

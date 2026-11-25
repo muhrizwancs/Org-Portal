@@ -102,7 +102,8 @@ def _job_role(role_id):
 def list_job_roles():
     rows = core.db.job_roles.find().sort("name", 1)
     return jsonify(roles=[{"id": str(r["_id"]), "name": r["name"], "department": r["department"],
-                          "permissions": r.get("permissions", []), "active": r.get("active", True)} for r in rows])
+                          "permissions": r.get("permissions", []), "active": r.get("active", True),
+                          "predefined": bool(r.get("predefined"))} for r in rows])
 
 
 @bp.post("/api/admin/job-roles")
@@ -116,10 +117,12 @@ def create_job_role():
         return fail("That job role already exists.", 409)
     doc = {"name": name, "name_lc": name.casefold(), "department": dept,
            "permissions": clean_perms(d.get("permissions")), "active": True,
+           "predefined": d.get("predefined") is True,
            "createdBy": g.user["email"], "createdAt": now(), "updatedAt": now()}
     result = core.db.job_roles.insert_one(doc)
     return jsonify(role={"id": str(result.inserted_id), "name": name, "department": dept,
-                         "permissions": doc["permissions"], "active": True}), 201
+                         "permissions": doc["permissions"], "active": True,
+                         "predefined": doc["predefined"]}), 201
 
 
 @bp.patch("/api/admin/job-roles/<rid>")
@@ -146,10 +149,13 @@ def update_job_role(rid):
         upd["permissions"] = clean_perms(d["permissions"])
     if isinstance(d.get("active"), bool):
         upd["active"] = d["active"]
+    if isinstance(d.get("predefined"), bool):
+        upd["predefined"] = d["predefined"]
     core.db.job_roles.update_one({"_id": role["_id"]}, {"$set": upd})
     r = core.db.job_roles.find_one({"_id": role["_id"]})
     return jsonify(role={"id": str(r["_id"]), "name": r["name"], "department": r["department"],
-                         "permissions": r.get("permissions", []), "active": r.get("active", True)})
+                         "permissions": r.get("permissions", []), "active": r.get("active", True),
+                         "predefined": bool(r.get("predefined"))})
 
 
 @bp.delete("/api/admin/job-roles/<rid>")
@@ -158,6 +164,8 @@ def delete_job_role(rid):
     role = core.db.job_roles.find_one({"_id": oid(rid)})
     if not role:
         return jsonify(ok=True)
+    if any(role["_id"] in d.get("jobRoleIds", []) for d in core.db.documents.find()):
+        return fail("This role is assigned to documents. Remove or change those document restrictions before deleting it.", 409)
     core.db.job_roles.delete_one({"_id": role["_id"]})
     core.db.users.update_many({"jobRoleId": role["_id"]}, {"$unset": {"jobRoleId": "", "jobRole": ""}})
     return jsonify(ok=True)

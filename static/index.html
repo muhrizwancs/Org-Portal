@@ -232,6 +232,8 @@
     <h3 id="jobRoleTitle">Define job role</h3>
     <label>Role name<input id="jrName" maxlength="80" placeholder="AI Engineer" required></label>
     <label>Department<select id="jrDept" required></select></label>
+    <label class="check"><input type="checkbox" id="jrPredefined"> Mark as a starter role</label>
+    <p class="note">Starter roles get a badge here and appear in the Starter roles group when assigning users.</p>
     <fieldset><legend>Default access</legend><div class="checks" id="jrPerms"></div></fieldset>
     <div class="err" id="jrErr" role="alert"></div>
     <div class="foot"><button type="button" class="btn ghost" id="jrCancel">Cancel</button><button class="btn" type="submit">Save role</button></div>
@@ -283,6 +285,11 @@
       <label>Category<select id="dCat"></select></label>
       <label>Visible to<select id="dDept"></select></label>
     </div>
+    <fieldset>
+      <legend>Also restrict to job roles (optional)</legend>
+      <div class="checks" id="dRoles"></div>
+      <small class="note">When any roles are selected, both the role and department must match. Leave them unchecked for department-based access only.</small>
+    </fieldset>
     <p class="note" id="dNote">PDF, Word (.docx) and text files are read by the assistant so it can cite file and page. Other files can be downloaded but are not searched.</p>
     <div class="err" id="dErr" role="alert"></div>
     <div class="foot"><button type="button" class="btn ghost" id="dCancel">Cancel</button><button class="btn" type="submit" id="dSave">Upload</button></div>

@@ -1,0 +1,13 @@
+SAMPLE ORGANIZATION REFERENCE
+This is a generic starting reference, not a live staff directory.
+
+Where to direct common questions
+- HR: onboarding, workplace questions, employee records, and leave procedures.
+- IT: accounts, approved software, devices, and technical access requests.
+- Finance: purchasing, expense claims, invoices, and budget questions.
+- Project manager: project scope, priorities, schedule, and delivery coordination.
+- Organization administrator: portal accounts, role access, and document publishing.
+
+Use the portal's Requests page for supported request types. For urgent security, privacy, or service incidents, follow the organization's incident reporting process.
+
+The organization administrator should replace this sample with approved contact names, channels, and escalation details.

@@ -26,7 +26,7 @@ from permissions import PERMS
 
 # concept groups: first word is the canonical concept
 GROUPS = [
-    ["c_role", "role", "roles", "position", "title", "designation", "job", "who", "identity", "profile", "account", "status", "level", "about"],
+    ["c_role", "role", "roles", "position", "title", "designation", "job", "identity", "profile", "account", "status", "level", "about"],
     ["c_perm", "permission", "permissions", "access", "allow", "allowed", "can", "able", "use", "used", "uses", "using", "usable", "privilege", "privileges", "right", "rights", "authorize", "authorized", "feature", "features", "capability", "capabilities", "do", "entitled", "granted", "grant", "open", "unlock"],
     ["c_assign", "assign", "assigned", "assignment", "assignments", "task", "tasks", "duty", "duties", "work", "responsibility", "responsibilities", "project", "projects", "given", "allocated", "todo", "handle", "handling"],
     ["c_admin", "admin", "administrator", "control", "manage", "administer", "owner"],
@@ -40,7 +40,7 @@ GROUPS = [
     ["c_pass", "password", "passwords", "login", "signin", "credential", "credentials", "reset", "forgot", "forget"],
     ["c_hello", "hello", "hi", "hey", "greetings", "help", "assistant", "bot", "chatbot", "rag", "ai", "start"],
 ]
-STOP = set("a an the is am are was be i me my mine myself to of for and or in on it what whats does this that with you your please tell show give we our have has at as by there any all if so how".split())
+STOP = set("a an the is am are was be i me my mine myself to of for and or in on it what whats does this that with you your please tell show give we our have has at as by there any all if so how who".split())
 FIRST_PERSON = {"my", "me", "mine", "myself", "am"}
 FIRST_PERSON_RE = re.compile(r"\b(what (can|could|do|am|should) i|can i|who am i|am i)\b")
 
@@ -264,6 +264,10 @@ def answer(query, user, knowledge, all_users=None, ctx=None):
     q_words = re.sub(r"[^a-z\s]", " ", q).split()
     first_person = any(w in FIRST_PERSON for w in q_words) or bool(FIRST_PERSON_RE.search(q))
     q_tokens = tokenize(query)
+    if re.search(r"\bwho am i\b", q):
+        q_tokens.append("c_role")
+    elif re.search(r"\bwho are you\b", q):
+        q_tokens.append("c_hello")
     asks_team = "c_team" in q_tokens
     q_vec = embed(q_tokens, idf)
 

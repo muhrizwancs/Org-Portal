@@ -34,7 +34,7 @@ Sign in as `boss@org.com` / `BossPass123!` (admin) or `sara@org.com` / `Password
 
 ## Pages and who can open them
 
-Admins define reusable job roles under **Job roles**, including a department and default page access. When creating a non-admin user, the admin selects a defined job role; its title, department, and access are assigned together. User creation does not offer separate permission checkboxes.
+Admins define reusable job roles under **Job roles**, including a department and default page access. The portal starts with software-house templates for Software Engineer, QA Engineer, DevOps Engineer, Project Manager, UI/UX Designer, HR Specialist, Finance Officer and Sales Executive. Admins can edit these or add their own, and can mark any role as a starter role to badge it and group it separately in the user role picker. When creating a non-admin user, the admin selects a defined job role; its title, department, and access are assigned together.
 
 | Page | Access setting | What it does |
 |---|---|---|
@@ -42,7 +42,7 @@ Admins define reusable job roles under **Job roles**, including a department and
 | Assistant | always | Chat with suggested questions, source chips, thumbs up/down. Saved chats on the left if *Chat history* is on |
 | My Tasks | My Tasks | Board (Assigned / In Progress / Completed) with priority, due date, progress. People update their own status |
 | Announcements | Announcements | Policies, holiday notices, company updates, training. Can target one department and be pinned |
-| Documents | Document Center | Search and download handbooks, policies, forms. Admin uploads, replaces (new version), deletes |
+| Documents | Document Center | Search and download handbooks, policies, forms. Admin uploads, replaces (new version), deletes; each document can be limited to selected job roles as well as a department |
 | Requests | Requests | Leave / access / training / equipment requests with a Submitted > Admin review > Approved/Rejected flow |
 | Profile | always | Name, employee ID, role, department, manager, joining date (admin edits them) |
 | Account | always | Change password |
@@ -52,7 +52,7 @@ Admin only: **Approvals** (decide requests), **Team tasks**, **Users**, **Knowle
 
 ## Roles
 
-Job roles (for example, **AI Engineer** in **IT**) are organization-defined templates. They are separate from account types and supply a user's job title, department, and default feature access when assigned.
+Job roles are organization-defined templates, separate from account types. Assigning one supplies a user's job title, department, and default feature access; documents may also be assigned to one or more job roles.
 
 * **Super admin:** the first admin. Approves or rejects knowledge entries written by other admins, and can promote
   other super admins (there is always at least one).
@@ -65,13 +65,18 @@ Job roles (for example, **AI Engineer** in **IT**) are organization-defined temp
 1. For every question a corpus is built for that person only, **before** any matching happens:
    * approved knowledge entries (audience `all`, or `admin` for admins)
    * live records: profile, manager and department, tasks, announcements and holidays, documents available
-   * text pieces of uploaded documents they are allowed to see (their department's and company-wide ones),
+   * text pieces of documents they are allowed to see (company-wide, department-scoped, or assigned to their job role),
      only if they have *Document Center* access
    * admins also get a live organization overview
 2. The question and documents are embedded with a concept-aware TF-IDF vector (synonyms collapse to shared concepts).
 3. The closest pieces by cosine similarity are returned. Entries for the asker's **own department are boosted**
    and other departments' entries are down-weighted, so an HR employee asking about leave gets the HR answer first.
 4. Answers from files end with `Source: HR_Policy_2026.pdf, page 12` and show a source chip.
+
+The starter library includes searchable samples across every Document Center category: handbook, policy, form, guide,
+and other reference material. They are assigned to relevant starter job roles; the Document Center and assistant
+enforce the same access. These are illustrative templates, not legal or regulatory advice, and should be reviewed
+and adapted by the organization before use.
 
 Documents: PDF (needs `pypdf`, already in `requirements.txt`), Word `.docx` and `.txt/.md/.csv` are read.
 Word files have no fixed pages, so they are cited by file name only. Other types (xlsx, pptx, images) can be
@@ -89,12 +94,14 @@ The super admin's own entries are approved immediately. Authors are notified of 
 
 * Pages/features users can be granted: `permissions.py`
 * Departments, announcement/document/request categories, task priorities: `constants.py`
+* Starter roles: `role_presets.py` (existing role customizations are not overwritten)
+* Starter policy text and role assignments: `rag/seed_documents.py` and `rag/sample_documents/`
 * Starting knowledge: `rag/seed_knowledge.py` (bump `SEED_VERSION` to refresh built-in entries on the next start)
 * Synonyms and matching: `GROUPS` in `rag/engine.py`
 
 ## Tests
 
-`python tests/run_tests.py` runs 148 end-to-end checks of the real routes (access control, department
+`python tests/run_tests.py` runs end-to-end checks of the real routes (access control, department and job-role
 isolation, citations, approvals, upgrade from v1) against an in-memory stand-in for MongoDB. No database needed.
 `python rag/selftest.py` prints retrieval results for sample questions.
 

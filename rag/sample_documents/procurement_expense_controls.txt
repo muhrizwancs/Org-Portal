@@ -1,0 +1,14 @@
+SAMPLE INTERNAL POLICY — Procurement and Expense Controls
+This is an illustrative company template, not a statement of legal or regulatory requirements.
+
+Purchases and expenses
+- Obtain approval from the authorized budget owner before making a non-routine commitment on the company's behalf.
+- Keep the business purpose, amount, date, vendor, and itemized receipt with each expense claim.
+- Do not approve your own expense claim or split a purchase to avoid an approval limit.
+- Finance reviews claims for completeness and routes exceptions to the appropriate approver.
+
+Vendor and payment handling
+Use the approved vendor onboarding and payment-change process. Independently verify unusual or changed payment instructions using a known contact method before acting. Restrict invoices, bank details, and payment records to authorized staff.
+
+Questions about this sample
+The company owner must adapt this template to actual contracts, approval limits, and applicable law before adopting it.

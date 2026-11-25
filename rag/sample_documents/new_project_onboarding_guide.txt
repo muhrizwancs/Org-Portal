@@ -1,0 +1,12 @@
+SAMPLE GUIDE — New Project Onboarding
+This guide is a starting checklist; follow the project owner's current instructions.
+
+1. Confirm the project goal, owner, stakeholders, scope, milestones, and acceptance criteria.
+2. Record the team, responsibilities, communication channel, and escalation contacts in the project workspace.
+3. Request access through the approved access process. Grant each person only the systems and information needed for their tasks.
+4. Review the repository, development setup, coding conventions, test strategy, and deployment process before making changes.
+5. Agree on how changes are reviewed, tested, approved, released, and rolled back. Keep relevant evidence with the work item or release.
+6. Identify customer or employee information involved in the project and use approved storage and safe test data.
+7. At project close, archive the agreed records and ask owners to remove temporary access that is no longer needed.
+
+For project-specific decisions, ask the project manager or technical owner. Use the company's current security and privacy policies where they apply.

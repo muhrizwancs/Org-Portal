@@ -1,0 +1,18 @@
+SAMPLE INTERNAL POLICY — Secure Software Development
+This is an illustrative company template, not a statement of legal or regulatory requirements.
+
+Purpose
+Build and maintain software with security and privacy considered throughout its lifecycle.
+
+Development controls
+- Use company-managed source control and individual accounts. Do not share credentials.
+- Keep secrets, private keys, and production data out of source code and test fixtures.
+- Require a peer review before merging changes to protected branches. Reviewers should check the change, tests, and relevant security impact.
+- Use approved dependencies, review meaningful dependency changes, and address reported vulnerabilities through the team's normal change process.
+- Use synthetic or appropriately anonymized data in development and testing.
+
+Release readiness
+Record the change owner, review, test evidence, and release approval in the project system. Report suspected security or privacy incidents promptly through the company's incident channel.
+
+Questions about this sample
+The company owner must adapt this template to actual systems, contracts, and applicable law before adopting it.
