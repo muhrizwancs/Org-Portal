@@ -6,7 +6,6 @@ import datetime as dt
 import io
 import os
 import sys
-import zipfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "fakes"))          # fake pymongo / bson / gridfs

@@ -1,14 +1,12 @@
 """Announcements and the Document Center."""
 import io
-import os
 
 from flask import Blueprint, g, jsonify, request, send_file
 from werkzeug.utils import secure_filename
 
 import core
 import constants as C
-from core import (auth_required, fail, has_perm, is_admin, iso, notify, now, oid, recipients, visible_announcements,
-                  visible_documents)
+from core import (auth_required, fail, iso, notify, now, oid, recipients, visible_announcements, visible_documents)
 from rag.extract import chunk_pages, extract_pages
 
 bp = Blueprint("content", __name__)
@@ -163,7 +161,7 @@ def _meta_fields(form, allow_inactive_roles=False):
     return {"title": title[:150], "category": cat, "department": dept, "jobRoleIds": role_ids}, None
 
 
-def _index(doc_id, filename, data, department):
+def _index(doc_id, filename, data):
     """Extract text, split into chunks and store them. Returns (indexed, note, chunk_count)."""
     core.db.doc_chunks.delete_many({"docId": doc_id})
     pages, note = extract_pages(filename, data)
@@ -192,7 +190,7 @@ def upload_document():
            "fileId": file_id, "version": 1, "uploadedBy": g.user["email"], "uploadedByName": g.user["name"],
            "createdAt": now(), "updatedAt": now()}
     res = core.db.documents.insert_one(doc)
-    indexed, note, n = _index(res.inserted_id, name, data, meta["department"])
+    indexed, note, n = _index(res.inserted_id, name, data)
     core.db.documents.update_one({"_id": res.inserted_id}, {"$set": {"indexed": indexed, "indexNote": note, "chunkCount": n}})
     notify(recipients("access_documents", meta["department"], exclude=g.user["_id"]), "document",
            f"New document: {meta['title']}", "documents")
@@ -223,7 +221,7 @@ def update_document(did):
             core.fs.delete(d["fileId"])
         except Exception:  # noqa: BLE001
             pass
-        indexed, note, n = _index(d["_id"], name, data, meta["department"])
+        indexed, note, n = _index(d["_id"], name, data)
         upd.update({"filename": name, "contentType": request.files["file"].mimetype, "size": len(data), "fileId": new_id,
                     "version": d.get("version", 1) + 1, "indexed": indexed, "indexNote": note, "chunkCount": n})
     core.db.documents.update_one({"_id": d["_id"]}, {"$set": upd})

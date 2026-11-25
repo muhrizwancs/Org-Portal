@@ -5,8 +5,8 @@ from flask import Blueprint, g, jsonify, request
 
 import core
 import constants as C
-from core import (admin_ids, as_utc, auth_required, clean_assignments, fail, has_perm, is_admin, iso, notify, now,
-                  oid, parse_date, ser_task, visible_announcements, visible_documents)
+from core import (admin_ids, auth_required, clean_assignments, fail, has_perm, is_admin, iso, notify, now, oid,
+                  parse_date, ser_task, visible_announcements, visible_documents)
 
 bp = Blueprint("work", __name__)
 

@@ -6,7 +6,7 @@ from flask import Blueprint, g, jsonify, request
 
 import core
 import constants as C
-from core import (as_utc, auth_required, fail, iso, notify, now, oid, recipients, ser_task)
+from core import (as_utc, auth_required, fail, iso, notify, now, oid, ser_task)
 
 bp = Blueprint("admin", __name__)
 
